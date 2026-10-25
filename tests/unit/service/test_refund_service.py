@@ -154,7 +154,7 @@ def test_check_eligibility_is_read_only() -> None:
     p = _purchase(1_000)
     svc = _service([p])
     decision = svc.check_eligibility(CUSTOMER.id, [p.id])
-    assert decision.eligible_ids == [p.id] or tuple(decision.eligible_ids) == (p.id,)
+    assert decision.eligible_ids == (p.id,)
     assert svc.list_tickets(CUSTOMER.id) == []
     assert svc.list_purchases(CUSTOMER.id) == [p]
 
@@ -193,3 +193,13 @@ def test_build_refund_service_shares_timezone() -> None:
     assert svc.clock.timezone == "Pacific/Kiritimati"
     fixed = FixedClock(TODAY)
     assert build_refund_service(repo, settings, fixed).clock is fixed
+
+
+def test_mixed_request_reasons_and_ids() -> None:
+    fresh, stale = _purchase(4_500, age_days=10), _purchase(3_000, age_days=45)
+    svc = _service([fresh, stale])
+    outcome = svc.request_refund(CUSTOMER.id, [fresh.id, stale.id])
+    assert outcome.ticket is not None
+    assert outcome.ticket.purchase_ids == (fresh.id,)
+    assert outcome.ticket.amount_cents == fresh.price_cents
+    assert outcome.ticket.decision_reasons == {str(stale.id): DeclineReason.OUTSIDE_WINDOW}
