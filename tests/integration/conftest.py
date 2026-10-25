@@ -18,8 +18,12 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
 from refund_agent.policy import Profile, Purchase, Ticket, TicketStatus
+from tests.integration.db_guard import assert_local_database
 
-DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+# Deliberately NOT ``DATABASE_URL``: that is the app's (possibly production)
+# database, and these tests truncate tables.
+TEST_DATABASE_URL_ENV = "TEST_DATABASE_URL"
+DEFAULT_TEST_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 # Marks fixture users so cleanup never touches real local auth users.
 TEST_EMAIL_DOMAIN = "refund-tests.invalid"
 
@@ -31,7 +35,13 @@ ActAs = Callable[[psycopg.Connection[Any], str, UUID | None], AbstractContextMan
 
 @pytest.fixture(scope="session")
 def database_url() -> str:
-    return os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
+    """The only source of connection URLs here; checked before any connect."""
+    url = os.environ.get(TEST_DATABASE_URL_ENV, DEFAULT_TEST_DATABASE_URL)
+    try:
+        assert_local_database(url)
+    except RuntimeError as exc:
+        pytest.exit(str(exc), returncode=pytest.ExitCode.USAGE_ERROR)
+    return url
 
 
 @pytest.fixture(scope="session")
