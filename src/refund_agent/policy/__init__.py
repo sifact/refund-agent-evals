@@ -1,4 +1,4 @@
-"""Pure policy core: domain models and clocks."""
+"""Pure policy core: domain models, clocks and refund rules."""
 
 from refund_agent.policy.clock import Clock, FixedClock, SystemClock
 from refund_agent.policy.models import (
@@ -11,12 +11,14 @@ from refund_agent.policy.models import (
     Ticket,
     TicketStatus,
 )
+from refund_agent.policy.rules import PolicySettings, decide_refund
 
 __all__ = [
     "Clock",
     "DeclineReason",
     "FixedClock",
     "ItemDecision",
+    "PolicySettings",
     "Profile",
     "Purchase",
     "RefundDecision",
@@ -24,4 +26,5 @@ __all__ = [
     "SystemClock",
     "Ticket",
     "TicketStatus",
+    "decide_refund",
 ]
