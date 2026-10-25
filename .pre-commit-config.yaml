@@ -1,9 +1,4 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.10
-    hooks:
-      - id: ruff
-      - id: ruff-format
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.24.0
     hooks:
@@ -12,9 +7,25 @@ repos:
     rev: v5.0.0
     hooks:
       - id: end-of-file-fixer
+        exclude: ^docs/
       - id: trailing-whitespace
+        exclude: ^docs/
+  # Local hooks run the ruff and mypy pinned in uv.lock, so pre-commit and CI
+  # can never disagree about versions.
   - repo: local
     hooks:
+      - id: ruff
+        name: ruff check
+        entry: uv run ruff check
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: ruff-format
+        name: ruff format --check
+        entry: uv run ruff format --check
+        language: system
+        pass_filenames: false
+        types: [python]
       - id: mypy
         name: mypy
         entry: uv run mypy src
