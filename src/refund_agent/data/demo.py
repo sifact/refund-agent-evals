@@ -1,7 +1,7 @@
 """Declarative demo data: who exists and what they bought.
 
 Why relative days: purchases are stored as ``days_ago`` so the same table drives
-both the SQL seed (``current_date - n``) and the in-memory evals (a fixed
+both the SQL seed (n days before today in the business timezone) and the in-memory evals (a fixed
 clock), and the 30-day refund window boundaries never go stale.
 """
 

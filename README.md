@@ -46,7 +46,11 @@ uv run pytest -m integration   # database tests (needs local Supabase)
 
 Integration tests read `TEST_DATABASE_URL` (default `postgresql://postgres:postgres@127.0.0.1:54322/postgres`) and refuse to run against non-local hosts, because they wipe the app tables.
 
-`uv run refund-agent seed-sql > supabase/seed.sql` regenerates the seed from the demo data.
+Seed purchase dates are relative to today in the business timezone (`TIMEZONE`), not the database session's `current_date`. The committed `supabase/seed.sql` is rendered for UTC; regenerate it from the demo data with:
+
+```bash
+uv run refund-agent seed-sql --timezone UTC > supabase/seed.sql   # omit --timezone to use TIMEZONE from .env
+```
 
 ## Demo accounts
 

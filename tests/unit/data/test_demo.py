@@ -1,6 +1,10 @@
 from datetime import date
 from pathlib import Path
 
+import pytest
+from typer.testing import CliRunner
+
+from refund_agent.cli import app
 from refund_agent.data import DEMO_USERS, build_demo_repository, demo_uuid, render_seed_sql
 from refund_agent.policy import Role
 
@@ -32,4 +36,41 @@ def test_build_demo_repository_relative_dates() -> None:
 
 
 def test_seed_sql_is_committed_and_current() -> None:
-    assert (ROOT / "supabase" / "seed.sql").read_text() == render_seed_sql()
+    assert (ROOT / "supabase" / "seed.sql").read_text() == render_seed_sql("UTC")
+
+
+def test_seed_sql_dates_use_business_timezone() -> None:
+    sql = render_seed_sql("Asia/Dhaka")
+    assert "((now() at time zone 'Asia/Dhaka')::date - 30)" in sql
+    assert "current_date" not in sql
+
+
+def test_seed_sql_future_offset_renders_cleanly() -> None:
+    sql = render_seed_sql("UTC")
+    assert "((now() at time zone 'UTC')::date + 2)" in sql
+    assert "- -" not in sql
+
+
+def test_seed_sql_rejects_unknown_timezone() -> None:
+    # The zone is interpolated into SQL, so only real IANA names are allowed.
+    with pytest.raises(ValueError):
+        render_seed_sql("UTC'; drop table purchases; --")
+
+
+def test_cli_seed_sql_timezone_option() -> None:
+    result = CliRunner().invoke(app, ["seed-sql", "--timezone", "Asia/Dhaka"])
+    assert result.exit_code == 0, result.output
+    assert result.output == render_seed_sql("Asia/Dhaka")
+
+
+def test_cli_seed_sql_defaults_to_settings_timezone(monkeypatch: pytest.MonkeyPatch) -> None:
+    from refund_agent.config import get_settings
+
+    monkeypatch.setenv("TIMEZONE", "Pacific/Kiritimati")
+    get_settings.cache_clear()
+    try:
+        result = CliRunner().invoke(app, ["seed-sql"])
+    finally:
+        get_settings.cache_clear()
+    assert result.exit_code == 0, result.output
+    assert result.output == render_seed_sql("Pacific/Kiritimati")
