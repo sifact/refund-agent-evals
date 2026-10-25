@@ -33,10 +33,14 @@ class _Unit:
         return self._repo.list_tickets(self._customer_id) + self.staged
 
     def create_ticket(self, t: NewTicket) -> Ticket:
-        # Rejected tickets free their purchases (the policy blocks re-requests).
-        taken = {
+        if t.customer_id != self._customer_id:
+            raise ValueError("ticket customer does not match the unit's customer")
+        # Global check (like a partial unique index): a purchase may sit on at
+        # most one non-rejected ticket. Rejected tickets free their purchases;
+        # the policy, not storage, blocks re-requests.
+        taken = self._repo.active_purchase_ids() | {
             pid
-            for tk in self.tickets()
+            for tk in self.staged
             if tk.status is not TicketStatus.REJECTED
             for pid in tk.purchase_ids
         }
@@ -66,6 +70,16 @@ class InMemoryRepository:
     def _lock_for(self, customer_id: UUID) -> threading.Lock:
         with self._store_lock:
             return self._customer_locks.setdefault(customer_id, threading.Lock())
+
+    def active_purchase_ids(self) -> set[UUID]:
+        """Purchase IDs on committed, non-rejected tickets across all customers."""
+        with self._store_lock:
+            return {
+                pid
+                for t in self._tickets.values()
+                if t.status is not TicketStatus.REJECTED
+                for pid in t.purchase_ids
+            }
 
     def get_profile(self, user_id: UUID) -> Profile | None:
         return self._profiles.get(user_id)

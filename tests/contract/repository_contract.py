@@ -108,6 +108,10 @@ class RepositoryContract:
         with repo.customer_unit(nt.customer_id) as unit:
             return unit.create_ticket(nt)
 
+    def _create_in(self, repo: RefundRepository, customer_id: UUID, nt: NewTicket) -> Ticket:
+        with repo.customer_unit(customer_id) as unit:
+            return unit.create_ticket(nt)
+
     def test_list_purchases_scoped_to_customer(self) -> None:
         repo = self._repo()
         assert {p.id for p in repo.list_purchases(CUSTOMER)} == {C_P1, C_P2}
@@ -146,6 +150,51 @@ class RepositoryContract:
             unit.create_ticket(new_ticket((C_P1,)))
             raise RuntimeError("boom")
         assert repo.list_tickets(CUSTOMER) == []
+
+    def test_create_ticket_for_other_customer_rejected(self) -> None:
+        repo = self._repo()
+        foreign = NewTicket(
+            customer_id=OTHER,
+            status=TicketStatus.APPROVED,
+            amount_cents=3000,
+            purchase_ids=(O_P1,),
+            decision_reasons={},
+            created_at=T0,
+        )
+        with pytest.raises(ValueError):
+            self._create_in(repo, CUSTOMER, foreign)
+        assert repo.list_tickets(OTHER) == []
+
+    def test_duplicate_check_is_global(self) -> None:
+        seeded = Ticket(
+            id=UUID("00000000-0000-0000-0000-00000000bb01"),
+            customer_id=OTHER,
+            status=TicketStatus.APPROVED,
+            amount_cents=3000,
+            purchase_ids=(O_P1,),
+            decision_reasons={},
+            created_at=T0,
+        )
+        repo = self._repo([seeded])
+        again = NewTicket(
+            customer_id=OTHER,
+            status=TicketStatus.APPROVED,
+            amount_cents=3000,
+            purchase_ids=(O_P1,),
+            decision_reasons={},
+            created_at=T1,
+        )
+        with pytest.raises(DuplicateRefundError):
+            self._create_in(repo, OTHER, again)
+        assert repo.list_tickets(OTHER) == [seeded]
+
+    def test_unit_writes_hidden_until_exit(self) -> None:
+        repo = self._repo()
+        with repo.customer_unit(CUSTOMER) as unit:
+            created = unit.create_ticket(new_ticket((C_P1,)))
+            assert repo.list_tickets(CUSTOMER) == []
+            assert [t.id for t in unit.tickets()] == [created.id]
+        assert [t.id for t in repo.list_tickets(CUSTOMER)] == [created.id]
 
     def test_review_pending_to_approved(self) -> None:
         repo = self._repo()
