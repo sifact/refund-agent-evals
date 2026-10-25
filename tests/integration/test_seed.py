@@ -10,8 +10,7 @@ from typing import Any
 import psycopg
 import pytest
 
-from refund_agent.data.demo import DEMO_EMAIL_DOMAIN, DEMO_USERS
-from refund_agent.data.seed_sql import render_seed_sql
+from refund_agent.data import DEMO_EMAIL_DOMAIN, DEMO_USERS, render_seed_sql
 from tests.integration.conftest import APP_TABLES
 
 pytestmark = pytest.mark.integration

@@ -1,8 +1,7 @@
 from datetime import date
 from pathlib import Path
 
-from refund_agent.data.demo import DEMO_USERS, build_demo_repository, demo_uuid
-from refund_agent.data.seed_sql import render_seed_sql
+from refund_agent.data import DEMO_USERS, build_demo_repository, demo_uuid, render_seed_sql
 from refund_agent.policy import Role
 
 ROOT = Path(__file__).resolve().parents[3]

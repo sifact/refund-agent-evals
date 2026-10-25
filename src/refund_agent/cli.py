@@ -2,7 +2,7 @@
 
 import typer
 
-from refund_agent.data.seed_sql import render_seed_sql
+from refund_agent.data import render_seed_sql
 
 app = typer.Typer(help="Refund agent tools.", no_args_is_help=True)
 

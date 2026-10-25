@@ -8,11 +8,12 @@ from hypothesis import strategies as st
 
 from refund_agent.policy import (
     DeclineReason,
+    PolicySettings,
     Purchase,
     Ticket,
     TicketStatus,
+    decide_refund,
 )
-from refund_agent.policy.rules import PolicySettings, decide_refund
 
 C = uuid4()
 D = uuid4()
