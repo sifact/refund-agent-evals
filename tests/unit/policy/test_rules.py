@@ -203,3 +203,26 @@ def test_running_total_age_uses_business_timezone() -> None:
     assert decide_refund([new], [new.id], [t], TODAY, dhaka).status is TicketStatus.PENDING_REVIEW
     utc = PolicySettings(30, 10000, 30, "UTC")
     assert decide_refund([new], [new.id], [t], TODAY, utc).status is TicketStatus.APPROVED
+
+
+def test_ticket_exactly_30_days_old_counts() -> None:
+    old, new = p("old", 6000, 30), p("new", 6000, 1)
+    t = ticket(TicketStatus.APPROVED, 6000, (old.id,), 30)
+    d = decide_refund([old, new], [new.id], [t], TODAY, S)
+    assert d.status is TicketStatus.PENDING_REVIEW
+
+
+def test_future_created_ticket_counts() -> None:
+    # A ticket dated after `today` (clock skew, timezone mismatch) must still
+    # count, so the running total fails closed instead of skipping review.
+    other, new = p("other", 6000, 1), p("new", 6000, 1)
+    t = ticket(TicketStatus.APPROVED, 6000, (other.id,), -1)
+    d = decide_refund([other, new], [new.id], [t], TODAY, S)
+    assert d.status is TicketStatus.PENDING_REVIEW
+
+
+def test_prior_plus_request_equal_threshold_approved() -> None:
+    old, new = p("old", 4000, 5), p("new", 6000, 1)
+    t = ticket(TicketStatus.APPROVED, 4000, (old.id,), 5)
+    d = decide_refund([old, new], [new.id], [t], TODAY, S)
+    assert d.status is TicketStatus.APPROVED

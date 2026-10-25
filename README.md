@@ -24,7 +24,7 @@ See the [design spec](docs/superpowers/specs/2026-10-26-refund-agent-evals-desig
 | Refund window | 30 days from purchase, inclusive (day 30 is eligible, day 31 is not). Future-dated purchases are never eligible. |
 | What goes on a ticket | Only eligible items. If none are eligible, no ticket is created. |
 | Review | A ticket goes to `pending_review` when the 30-day running total of approved and pending tickets, plus this ticket, is over $100. Exactly $100 is auto-approved. |
-| Running total | Ticket ages use the business timezone (`TIMEZONE`, default `UTC`). |
+| Running total | Ticket ages use the business timezone (`TIMEZONE`, default `UTC`). A ticket dated after today still counts, so the check fails closed. |
 | Rejection | Final. A rejected purchase cannot be requested again (`previously_rejected`). |
 | Staff approval | Does not re-check the window; it was judged at request time. |
 

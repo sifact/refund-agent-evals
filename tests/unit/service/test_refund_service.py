@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from refund_agent.config import Settings
 from refund_agent.data import InMemoryRepository, InvalidTicketTransitionError
 from refund_agent.policy import (
     DeclineReason,
@@ -14,9 +15,10 @@ from refund_agent.policy import (
     Profile,
     Purchase,
     Role,
+    SystemClock,
     TicketStatus,
 )
-from refund_agent.service import RefundService
+from refund_agent.service import RefundService, build_refund_service
 
 TODAY = date(2026, 10, 15)
 SETTINGS = PolicySettings(window_days=30, review_threshold_cents=10_000, running_total_days=30)
@@ -144,3 +146,31 @@ def test_unknown_id_is_declined_not_owned() -> None:
     outcome = svc.request_refund(CUSTOMER.id, [ghost])
     assert outcome.ticket is None
     assert outcome.decision.items[0].reason is DeclineReason.NOT_OWNED
+
+
+def test_split_refund_reviewed_in_far_east_timezone() -> None:
+    # UTC+14: noon UTC would be the next local day, so a FixedClock that
+    # ignored the zone produced a "future" ticket the running total skipped.
+    zone = "Pacific/Kiritimati"
+    a, b = _purchase(6_000), _purchase(6_000)
+    repo = InMemoryRepository([CUSTOMER, STAFF], [a, b], [])
+    settings = PolicySettings(
+        window_days=30, review_threshold_cents=10_000, running_total_days=30, timezone=zone
+    )
+    svc = RefundService(repo, FixedClock(TODAY, zone), settings)
+    first = svc.request_refund(CUSTOMER.id, [a.id])
+    second = svc.request_refund(CUSTOMER.id, [b.id])
+    assert first.ticket is not None and first.ticket.status is TicketStatus.APPROVED
+    assert second.ticket is not None and second.ticket.status is TicketStatus.PENDING_REVIEW
+
+
+def test_build_refund_service_shares_timezone() -> None:
+    settings = Settings(timezone="Pacific/Kiritimati")
+    repo = InMemoryRepository([CUSTOMER, STAFF], [], [])
+    svc = build_refund_service(repo, settings)
+    assert isinstance(svc, RefundService)
+    assert svc.settings == PolicySettings.from_settings(settings)
+    assert isinstance(svc.clock, SystemClock)
+    assert svc.clock.timezone == "Pacific/Kiritimati"
+    fixed = FixedClock(TODAY)
+    assert build_refund_service(repo, settings, fixed).clock is fixed

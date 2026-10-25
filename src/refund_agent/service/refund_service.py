@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from refund_agent.config import Settings
 from refund_agent.data import NewTicket, RefundRepository
 from refund_agent.policy import (
     Clock,
@@ -17,6 +18,7 @@ from refund_agent.policy import (
     Purchase,
     RefundDecision,
     Role,
+    SystemClock,
     Ticket,
     TicketStatus,
     decide_refund,
@@ -39,6 +41,16 @@ class RefundService:
         self._repo = repo
         self._clock = clock
         self._settings = settings
+
+    @property
+    def clock(self) -> Clock:
+        """The clock decisions are dated by."""
+        return self._clock
+
+    @property
+    def settings(self) -> PolicySettings:
+        """The policy numbers decisions use."""
+        return self._settings
 
     def list_purchases(self, customer_id: UUID) -> list[Purchase]:
         """A customer's purchases."""
@@ -113,3 +125,18 @@ class RefundService:
             note,
             self._clock.now(),
         )
+
+
+def build_refund_service(
+    repo: RefundRepository, settings: Settings, clock: Clock | None = None
+) -> RefundService:
+    """Wire a ``RefundService`` from app settings.
+
+    The default clock and the policy read the same ``settings.timezone``, so
+    "today" and ticket ages can never disagree about the business day.
+    """
+    return RefundService(
+        repo,
+        clock if clock is not None else SystemClock(settings.timezone),
+        PolicySettings.from_settings(settings),
+    )

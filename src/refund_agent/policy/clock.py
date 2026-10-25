@@ -21,16 +21,21 @@ def _utcnow() -> datetime:
 
 
 class FixedClock:
-    """Pinned to a day, for tests and evals that need reproducible results."""
+    """Pinned to a day, for tests and evals that need reproducible results.
 
-    def __init__(self, day: date) -> None:
+    ``now()`` is noon *local* time in ``timezone``, so ``now()`` and ``today()``
+    describe the same business day; noon UTC is already tomorrow in UTC+12.
+    """
+
+    def __init__(self, day: date, timezone: str = "UTC") -> None:
         self._day = day
+        self._tz = ZoneInfo(timezone)
 
     def today(self) -> date:
         return self._day
 
     def now(self) -> datetime:
-        return datetime.combine(self._day, time(12), tzinfo=UTC)
+        return datetime.combine(self._day, time(12), tzinfo=self._tz).astimezone(UTC)
 
 
 class SystemClock:
@@ -38,6 +43,11 @@ class SystemClock:
 
     def __init__(self, timezone: str) -> None:
         self._tz = ZoneInfo(timezone)
+
+    @property
+    def timezone(self) -> str:
+        """The business timezone ``today()`` is evaluated in."""
+        return self._tz.key
 
     def today(self) -> date:
         return _utcnow().astimezone(self._tz).date()

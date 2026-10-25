@@ -85,14 +85,19 @@ def _prior_total(tickets: Sequence[Ticket], today: date, settings: PolicySetting
 
     `created_at` is UTC but `today` is a business-timezone date, so the ticket
     is converted to the business zone first; otherwise tickets near local
-    midnight are aged one day off and the window edge shifts.
+    midnight are aged one day off and the window edge shifts. A ticket dated
+    after `today` (clock skew, zone mismatch) is treated as age 0 so it still
+    counts: the check fails closed rather than skipping review.
     """
     zone = ZoneInfo(settings.timezone)
+
+    def age(t: Ticket) -> int:
+        return max(0, (today - t.created_at.astimezone(zone).date()).days)
+
     return sum(
         t.amount_cents
         for t in tickets
-        if t.status in _ACTIVE_STATUSES
-        and 0 <= (today - t.created_at.astimezone(zone).date()).days <= settings.running_total_days
+        if t.status in _ACTIVE_STATUSES and age(t) <= settings.running_total_days
     )
 
 
