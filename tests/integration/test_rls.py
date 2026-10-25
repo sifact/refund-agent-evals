@@ -108,7 +108,64 @@ def test_rls_client_cannot_update_or_delete(
         conn.execute(statement)
 
 
-def test_rls_anon_sees_nothing(conn: psycopg.Connection[Any], act_as: ActAs) -> None:
-    with act_as(conn, "anon"):
-        for table in APP_TABLES:
-            assert _count(conn, table) == 0, table
+@pytest.mark.parametrize("table", APP_TABLES)
+def test_rls_anon_cannot_read(conn: psycopg.Connection[Any], act_as: ActAs, table: str) -> None:
+    # anon holds no privileges at all, so reads fail before RLS is consulted.
+    with pytest.raises(errors.InsufficientPrivilege), act_as(conn, "anon"):
+        _count(conn, table)
+
+
+CLIENT_WRITE_PRIVILEGES = ("INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
+
+
+def _has(conn: psycopg.Connection[Any], role: str, table: str, privilege: str) -> bool:
+    row = conn.execute(
+        "select has_table_privilege(%s, %s, %s)", (role, f"public.{table}", privilege)
+    ).fetchone()
+    assert row is not None
+    return bool(row[0])
+
+
+def test_client_roles_have_only_select(conn: psycopg.Connection[Any]) -> None:
+    for table in APP_TABLES:
+        assert _has(conn, "authenticated", table, "SELECT"), table
+        for privilege in CLIENT_WRITE_PRIVILEGES:
+            assert not _has(conn, "authenticated", table, privilege), (table, privilege)
+        for privilege in ("SELECT", *CLIENT_WRITE_PRIVILEGES):
+            assert not _has(conn, "anon", table, privilege), (table, privilege)
+
+
+def test_is_staff_executable_only_by_authenticated(conn: psycopg.Connection[Any]) -> None:
+    def can_execute(role: str) -> bool:
+        row = conn.execute(
+            "select has_function_privilege(%s, 'public.is_staff()', 'EXECUTE')", (role,)
+        ).fetchone()
+        assert row is not None
+        return bool(row[0])
+
+    assert can_execute("authenticated")
+    assert not can_execute("anon")
+    assert not can_execute("public")
+
+
+@pytest.mark.parametrize(
+    ("positions", "error"),
+    [((-1,), errors.CheckViolation), ((0, 0), errors.UniqueViolation)],
+)
+def test_ticket_item_positions_are_valid_and_unique(
+    conn: psycopg.Connection[Any], positions: tuple[int, ...], error: type[Exception]
+) -> None:
+    ticket_id = UUID("00000000-0000-0000-0000-00000000bb03")
+    conn.execute(
+        "insert into refund_tickets (id, customer_id, status, amount_cents)"
+        " values (%s, %s, 'pending_review', 3000)",
+        (ticket_id, CUSTOMER),
+    )
+    purchases = [p.id for p in PURCHASES if p.customer_id == CUSTOMER]
+    with pytest.raises(error), conn.transaction():
+        for pid, position in zip(purchases, positions, strict=False):
+            conn.execute(
+                "insert into refund_ticket_items (ticket_id, purchase_id, position)"
+                " values (%s, %s, %s)",
+                (ticket_id, pid, position),
+            )

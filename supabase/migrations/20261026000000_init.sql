@@ -1,7 +1,7 @@
 -- Refund agent schema: profiles, purchases, refund tickets and their items.
 --
--- Security model: clients (anon / authenticated) may only READ, and only their
--- own rows unless they are staff. Every write goes through the backend's
+-- Security model: signed-in clients (authenticated) may only READ, and only
+-- their own rows unless they are staff; anon has no access at all. Every write goes through the backend's
 -- RefundService using the service connection, so there are deliberately no
 -- insert/update/delete policies and those privileges are revoked.
 
@@ -47,8 +47,9 @@ create table public.refund_ticket_items (
     -- false once the ticket is rejected, which frees the purchase for a new ticket.
     active boolean not null default true,
     -- Keeps the purchase order the customer asked for, so reads round-trip exactly.
-    position smallint not null default 0,
-    primary key (ticket_id, purchase_id)
+    position smallint not null default 0 check (position >= 0),
+    primary key (ticket_id, purchase_id),
+    unique (ticket_id, position)
 );
 
 -- The database-level guarantee against double refunds: a purchase can sit on
@@ -67,6 +68,10 @@ as $$
         select 1 from public.profiles where id = auth.uid() and role = 'staff'
     )
 $$;
+
+-- Only signed-in clients evaluate policies that call it; nobody else needs it.
+revoke execute on function public.is_staff() from public, anon;
+grant execute on function public.is_staff() to authenticated;
 
 -- ---------------------------------------------------------------- row-level security
 
@@ -99,7 +104,12 @@ create policy refund_ticket_items_select on public.refund_ticket_items
     );
 
 -- Belt and braces: even if a write policy were added by mistake, clients still
--- lack the privilege. truncate is included because it bypasses RLS entirely.
-revoke insert, update, delete, truncate
+-- lack the privilege. Supabase's default privileges grant everything to the
+-- client roles, so revoke it all (truncate bypasses RLS entirely) and grant
+-- back only SELECT to signed-in users; anon gets nothing.
+revoke all
     on public.profiles, public.purchases, public.refund_tickets, public.refund_ticket_items
     from anon, authenticated;
+grant select
+    on public.profiles, public.purchases, public.refund_tickets, public.refund_ticket_items
+    to authenticated;
