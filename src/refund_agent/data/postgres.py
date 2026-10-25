@@ -8,8 +8,9 @@ every process and replica:
 * the partial unique index ``refund_ticket_items_active_purchase_uq`` makes a
   double refund impossible even if the lock were bypassed.
 
-This module connects with the service role (table owner), which bypasses RLS;
-RLS exists to lock out the browser clients, not this backend.
+This module connects as the table-owner ``postgres`` role (not Supabase's
+``service_role``); as owner it bypasses RLS, which exists to lock out the
+browser clients, not this backend.
 """
 
 from collections.abc import Iterator

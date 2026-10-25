@@ -13,7 +13,10 @@ A production-grade refund support agent, with a layered DeepEval evaluation suit
 | Plan | Scope | State |
 |---|---|---|
 | 1. Foundation | Policy rules, storage (in-memory and Postgres), refund service, demo data | Done |
-| 2 to 5 | Agent, evaluation layers (deterministic, single-turn, multi-turn, policy attacks) and CI quality gate | Planned |
+| 2. Agent and tracing | LangChain refund agent on Groq, its tools and Langfuse tracing | Planned |
+| 3. Evaluation and CI gate | Deterministic, single-turn, multi-turn and policy-attack evals, gated in CI | Planned |
+| 4. API, auth and UI | FastAPI routes, Supabase login and the dark-theme HTML chat UI | Planned |
+| 5. Production hardening | Guardrails, rate limiting and deployment readiness | Planned |
 
 See the [design spec](docs/superpowers/specs/2026-10-26-refund-agent-evals-design.md) and the [Foundation plan](docs/superpowers/plans/2026-10-26-01-foundation.md).
 
@@ -37,6 +40,7 @@ Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), the [Supabase CLI](http
 ```bash
 git clone https://github.com/sifact/refund-agent-evals.git
 cd refund-agent-evals
+cp .env.example .env           # local defaults; edit TIMEZONE and friends here
 uv sync
 supabase start
 supabase db reset              # applies migrations and loads the demo seed; run before every demo
@@ -44,7 +48,7 @@ uv run pytest                  # unit tests (no database needed)
 uv run pytest -m integration   # database tests (needs local Supabase)
 ```
 
-Integration tests read `TEST_DATABASE_URL` (default `postgresql://postgres:postgres@127.0.0.1:54322/postgres`) and refuse to run against non-local hosts, because they wipe the app tables.
+Integration tests read `TEST_DATABASE_URL` (default `postgresql://postgres:postgres@127.0.0.1:54322/postgres`) and refuse to run against non-local hosts, because they wipe the app tables. That includes the local demo data: run `supabase db reset` afterwards to restore it.
 
 Seed purchase dates are relative to today in the business timezone (`TIMEZONE`), not the database session's `current_date`. The committed `supabase/seed.sql` is rendered for UTC; regenerate it from the demo data with:
 

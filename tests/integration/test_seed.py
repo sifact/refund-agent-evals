@@ -1,8 +1,8 @@
 """The demo seed applies to a real local Supabase and matches the declared data.
 
 Order independence: the autouse ``clean_db`` (conftest) truncates app tables
-before every test, so the module fixture below runs after it for each test
-(function scope) and re-applies the seed from scratch.
+before every test, and the function-scoped fixture below depends on it, so it
+runs after it for each test and re-applies the seed from scratch.
 """
 
 from datetime import UTC, datetime, timedelta
