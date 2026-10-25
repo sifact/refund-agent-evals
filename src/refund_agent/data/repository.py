@@ -55,6 +55,14 @@ class NewTicket(BaseModel):
             raise ValueError("new ticket must be approved or pending_review")
         return v
 
+    @field_validator("purchase_ids")
+    @classmethod
+    def _unique_purchases(cls, v: tuple[UUID, ...]) -> tuple[UUID, ...]:
+        """Reject repeats so both backends fail the same way, before storage."""
+        if len(set(v)) != len(v):
+            raise ValueError("duplicate purchase_ids on a new ticket")
+        return v
+
 
 class CustomerUnit(Protocol):
     """Work done under one customer's exclusive lock."""

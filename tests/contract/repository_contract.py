@@ -144,6 +144,14 @@ class RepositoryContract:
         again = self._create(repo, new_ticket((C_P1,), created_at=T2))
         assert again.purchase_ids == (C_P1,)
 
+    def test_new_ticket_rejects_duplicate_purchase_ids(self) -> None:
+        # Without this, Postgres fails on the (ticket_id, purchase_id) primary
+        # key while memory would silently store the repeat: a backend split.
+        repo = self._repo()
+        with pytest.raises(ValueError, match="duplicate"):
+            new_ticket((C_P1, C_P1))
+        assert repo.list_tickets(CUSTOMER) == []
+
     def test_unit_rolls_back_on_exception(self) -> None:
         repo = self._repo()
         with pytest.raises(RuntimeError), repo.customer_unit(CUSTOMER) as unit:
