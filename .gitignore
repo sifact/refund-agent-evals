@@ -1,2 +1,11 @@
 .DS_Store
 .superpowers/
+.env
+.venv/
+__pycache__/
+.deepeval/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+/reports/
+supabase/.temp/
