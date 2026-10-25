@@ -214,11 +214,36 @@ class RepositoryContract:
         assert reviewed.review_note == "ok"
         assert repo.get_ticket(ticket.id) == reviewed
 
-    def test_review_non_pending_raises_invalid_transition(self) -> None:
+    @pytest.mark.parametrize("target", [TicketStatus.APPROVED, TicketStatus.REJECTED])
+    @pytest.mark.parametrize("start", [TicketStatus.APPROVED, TicketStatus.REJECTED])
+    def test_review_non_pending_raises_invalid_transition(
+        self, start: TicketStatus, target: TicketStatus
+    ) -> None:
+        # Pins "rejection is final" (and "approval is final") at storage, not
+        # only in the service: a reviewed ticket can never be reviewed again.
         repo = self._repo()
-        ticket = self._create(repo, new_ticket((C_P1,), status=TicketStatus.APPROVED))
+        if start is TicketStatus.APPROVED:
+            ticket = self._create(repo, new_ticket((C_P1,), status=TicketStatus.APPROVED))
+        else:
+            pending = self._create(repo, new_ticket((C_P1,)))
+            ticket = repo.review_ticket(pending.id, TicketStatus.REJECTED, STAFF, "no", T1)
+        before = repo.get_ticket(ticket.id)
+        assert before is not None and before.status is start
         with pytest.raises(InvalidTicketTransitionError):
-            repo.review_ticket(ticket.id, TicketStatus.REJECTED, STAFF, None, T1)
+            repo.review_ticket(ticket.id, target, OTHER, "again", T2)
+        after = repo.get_ticket(ticket.id)
+        assert after == before
+        assert after is not None
+        assert (after.status, after.reviewed_by, after.reviewed_at, after.review_note) == (
+            before.status,
+            before.reviewed_by,
+            before.reviewed_at,
+            before.review_note,
+        )
+        if start is TicketStatus.REJECTED:
+            # The failed re-review must not re-activate the items.
+            again = self._create(repo, new_ticket((C_P1,), created_at=T2))
+            assert again.purchase_ids == (C_P1,)
 
     def test_review_unknown_ticket_raises_not_found(self) -> None:
         repo = self._repo()
