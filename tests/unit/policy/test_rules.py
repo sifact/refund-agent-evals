@@ -185,3 +185,20 @@ def test_ticket_never_contains_ineligible_item(
         assert pid in by_id
         assert 0 <= (TODAY - by_id[pid].purchased_on).days <= S.window_days
     assert d.amount_cents == sum(by_id[i].price_cents for i in d.eligible_ids)
+
+
+def test_running_total_age_uses_business_timezone() -> None:
+    new = p("new", 6000, 1)
+    t = Ticket(
+        id=uuid4(),
+        customer_id=C,
+        status=TicketStatus.APPROVED,
+        amount_cents=6000,
+        purchase_ids=(uuid4(),),
+        decision_reasons={},
+        created_at=datetime(2026, 9, 14, 19, tzinfo=UTC),
+    )
+    dhaka = PolicySettings(30, 10000, 30, "Asia/Dhaka")
+    assert decide_refund([new], [new.id], [t], TODAY, dhaka).status is TicketStatus.PENDING_REVIEW
+    utc = PolicySettings(30, 10000, 30, "UTC")
+    assert decide_refund([new], [new.id], [t], TODAY, utc).status is TicketStatus.APPROVED

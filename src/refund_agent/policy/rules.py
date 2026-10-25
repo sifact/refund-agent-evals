@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from refund_agent.config import Settings
 from refund_agent.policy.models import (
@@ -30,6 +31,8 @@ class PolicySettings:
     window_days: int
     review_threshold_cents: int
     running_total_days: int
+    # Business timezone: ticket ages must be measured in the same zone as `today`.
+    timezone: str = "UTC"
 
     @classmethod
     def from_settings(cls, s: Settings) -> "PolicySettings":
@@ -38,6 +41,7 @@ class PolicySettings:
             window_days=s.refund_window_days,
             review_threshold_cents=s.review_threshold_cents,
             running_total_days=s.running_total_days,
+            timezone=s.timezone,
         )
 
 
@@ -76,12 +80,19 @@ def _judge(
     return None
 
 
-def _prior_total(tickets: Sequence[Ticket], today: date, days: int) -> int:
-    """Sum of recent approved/pending refunds, so splitting requests can't dodge review."""
+def _prior_total(tickets: Sequence[Ticket], today: date, settings: PolicySettings) -> int:
+    """Sum of recent approved/pending refunds, so splitting requests can't dodge review.
+
+    `created_at` is UTC but `today` is a business-timezone date, so the ticket
+    is converted to the business zone first; otherwise tickets near local
+    midnight are aged one day off and the window edge shifts.
+    """
+    zone = ZoneInfo(settings.timezone)
     return sum(
         t.amount_cents
         for t in tickets
-        if t.status in _ACTIVE_STATUSES and 0 <= (today - t.created_at.date()).days <= days
+        if t.status in _ACTIVE_STATUSES
+        and 0 <= (today - t.created_at.astimezone(zone).date()).days <= settings.running_total_days
     )
 
 
@@ -115,7 +126,7 @@ def decide_refund(
     if not any(i.eligible for i in items):
         return RefundDecision(items=tuple(items), amount_cents=0, status=None)
 
-    prior = _prior_total(existing_tickets, today, settings.running_total_days)
+    prior = _prior_total(existing_tickets, today, settings)
     status = (
         TicketStatus.PENDING_REVIEW
         if prior + amount > settings.review_threshold_cents
