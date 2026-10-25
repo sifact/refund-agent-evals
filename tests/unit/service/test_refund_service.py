@@ -91,7 +91,7 @@ def test_repeat_request_after_rejection_is_declined() -> None:
     svc = _service([p])
     first = svc.request_refund(CUSTOMER.id, [p.id])
     assert first.ticket is not None
-    svc.review(first.ticket.id, STAFF, approve=False, note="no")
+    svc.review(first.ticket.id, STAFF.id, approve=False, note="no")
     again = svc.request_refund(CUSTOMER.id, [p.id])
     assert again.ticket is None
     assert again.decision.items[0].reason is DeclineReason.PREVIOUSLY_REJECTED
@@ -104,8 +104,27 @@ def test_review_requires_staff() -> None:
     outcome = svc.request_refund(CUSTOMER.id, [p.id])
     assert outcome.ticket is not None
     with pytest.raises(PermissionError):
-        svc.review(outcome.ticket.id, CUSTOMER, approve=True, note=None)
-    assert [t.id for t in svc.list_pending()] == [outcome.ticket.id]
+        svc.review(outcome.ticket.id, CUSTOMER.id, approve=True, note=None)
+    assert [t.id for t in svc.list_pending(STAFF.id)] == [outcome.ticket.id]
+
+
+def test_review_unknown_reviewer_denied() -> None:
+    p = _purchase(15_000)
+    svc = _service([p])
+    outcome = svc.request_refund(CUSTOMER.id, [p.id])
+    assert outcome.ticket is not None
+    with pytest.raises(PermissionError):
+        svc.review(outcome.ticket.id, uuid4(), approve=True, note=None)
+    assert [t.id for t in svc.list_pending(STAFF.id)] == [outcome.ticket.id]
+
+
+def test_list_pending_requires_staff() -> None:
+    svc = _service([])
+    with pytest.raises(PermissionError):
+        svc.list_pending(CUSTOMER.id)
+    with pytest.raises(PermissionError):
+        svc.list_pending(uuid4())
+    assert svc.list_pending(STAFF.id) == []
 
 
 def test_review_does_not_recheck_window() -> None:
@@ -116,7 +135,7 @@ def test_review_does_not_recheck_window() -> None:
     assert outcome.ticket is not None
     assert outcome.ticket.status is TicketStatus.PENDING_REVIEW
     clock.day = TODAY + timedelta(days=10)
-    reviewed = svc.review(outcome.ticket.id, STAFF, approve=True, note="ok")
+    reviewed = svc.review(outcome.ticket.id, STAFF.id, approve=True, note="ok")
     assert reviewed.status is TicketStatus.APPROVED
     assert reviewed.reviewed_by == STAFF.id
 
@@ -126,9 +145,9 @@ def test_review_already_approved_raises() -> None:
     svc = _service([p])
     outcome = svc.request_refund(CUSTOMER.id, [p.id])
     assert outcome.ticket is not None
-    svc.review(outcome.ticket.id, STAFF, approve=True, note=None)
+    svc.review(outcome.ticket.id, STAFF.id, approve=True, note=None)
     with pytest.raises(InvalidTicketTransitionError):
-        svc.review(outcome.ticket.id, STAFF, approve=True, note=None)
+        svc.review(outcome.ticket.id, STAFF.id, approve=True, note=None)
 
 
 def test_check_eligibility_is_read_only() -> None:

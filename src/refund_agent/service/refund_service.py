@@ -14,7 +14,6 @@ from refund_agent.data import NewTicket, RefundRepository
 from refund_agent.policy import (
     Clock,
     PolicySettings,
-    Profile,
     Purchase,
     RefundDecision,
     Role,
@@ -106,22 +105,32 @@ class RefundService:
             )
         return RefundOutcome(decision=decision, ticket=ticket)
 
-    def list_pending(self) -> list[Ticket]:
-        """The review queue, oldest first."""
+    def _require_staff(self, user_id: UUID) -> None:
+        """Resolve the role from storage, never from the caller.
+
+        A caller could otherwise pass a forged staff profile; an unknown user
+        is denied the same way as a customer.
+        """
+        profile = self._repo.get_profile(user_id)
+        if profile is None or profile.role is not Role.STAFF:
+            raise PermissionError("only staff can review refund tickets")
+
+    def list_pending(self, reviewer_id: UUID) -> list[Ticket]:
+        """The review queue, oldest first; staff only."""
+        self._require_staff(reviewer_id)
         return self._repo.list_tickets_by_status(TicketStatus.PENDING_REVIEW)
 
-    def review(self, ticket_id: UUID, reviewer: Profile, approve: bool, note: str | None) -> Ticket:
+    def review(self, ticket_id: UUID, reviewer_id: UUID, approve: bool, note: str | None) -> Ticket:
         """Staff-only approve/reject of a pending ticket.
 
         The refund window is deliberately not re-checked: it was judged at
         request time, and review delay is not the customer's fault.
         """
-        if reviewer.role is not Role.STAFF:
-            raise PermissionError("only staff can review refund tickets")
+        self._require_staff(reviewer_id)
         return self._repo.review_ticket(
             ticket_id,
             TicketStatus.APPROVED if approve else TicketStatus.REJECTED,
-            reviewer.id,
+            reviewer_id,
             note,
             self._clock.now(),
         )
