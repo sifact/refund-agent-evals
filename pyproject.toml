@@ -11,6 +11,9 @@ dependencies = [
     "typer",
 ]
 
+[project.scripts]
+refund-agent = "refund_agent.cli:app"
+
 [dependency-groups]
 dev = [
     "pytest",
