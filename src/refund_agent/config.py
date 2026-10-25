@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     timezone: str = "UTC"
     # SecretStr keeps credentials out of reprs and logs.
     database_url: SecretStr | None = None
+    # Upper bound on pooled DB connections; each open customer unit holds one.
+    db_pool_max_size: int = 10
 
 
 @lru_cache

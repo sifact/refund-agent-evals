@@ -1,6 +1,7 @@
 """Persistence layer: the repository protocol and its implementations."""
 
 from refund_agent.data.memory import InMemoryRepository
+from refund_agent.data.postgres import PostgresRepository, make_pool
 from refund_agent.data.repository import (
     CustomerUnit,
     DuplicateRefundError,
@@ -17,7 +18,9 @@ __all__ = [
     "InMemoryRepository",
     "InvalidTicketTransitionError",
     "NewTicket",
+    "PostgresRepository",
     "RefundRepository",
     "RepositoryError",
     "TicketNotFoundError",
+    "make_pool",
 ]
